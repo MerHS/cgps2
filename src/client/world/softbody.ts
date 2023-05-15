@@ -12,9 +12,10 @@ export class SoftBodyObject implements Collider {
   invmass: number[];
   v0: number[];
   l0: number[];
+  edgeRaw: number[];
+
   stiffK: number;
   translate: THREE.Vector3;
-
   vertLen: number;
   tetLen: number;
   options: ObjectOption;
@@ -46,6 +47,7 @@ export class SoftBodyObject implements Collider {
     this.nextpos = [];
     this.deltapos = [];
     this.vel = [];
+    this.edgeRaw = file.tetEdgeIds;
 
     this.translate = translate ? translate : new THREE.Vector3(0, 0, 0);
 
@@ -58,7 +60,7 @@ export class SoftBodyObject implements Collider {
     let massNum = Array(this.vertLen).fill(0);
     this.invmass = Array(this.vertLen).fill(1);
     this.v0 = Array(this.tetLen).fill(0);
-    this.l0 = Array(file.tetEdgeIds.length / 2).fill(0);
+    this.l0 = Array(this.edgeRaw.length / 2).fill(0);
 
     for (let i = 0; i < this.initPos.length / 3; i++) {
       this.pos.push(
@@ -78,13 +80,13 @@ export class SoftBodyObject implements Collider {
     this.idx = new Uint16Array(file["tetSurfaceTriIds"]);
     this.edgeIdx = new Uint16Array(file["tetEdgeIds"]);
 
-    // const tl = new THREE.Vector3(0, 0, 0);
-    // for (let i = 0; i < this.l0.length; i++) {
-    //   this.l0[i] = tl
-    //     .copy(this.pos[this.edgeIdx[2 * i]])
-    //     .sub(this.pos[this.edgeIdx[2 * i + 1]])
-    //     .length();
-    // }
+    const tl = new THREE.Vector3(0, 0, 0);
+    for (let i = 0; i < this.l0.length; i++) {
+      this.l0[i] = tl
+        .copy(this.pos[this.edgeRaw[2 * i]])
+        .sub(this.pos[this.edgeRaw[2 * i + 1]])
+        .length();
+    }
 
     this.geometry = new THREE.BufferGeometry();
     this.geometry.setIndex(new THREE.BufferAttribute(this.idx, 1));
@@ -218,13 +220,18 @@ export class SoftBodyObject implements Collider {
     for (let i = 0; i < this.vertLen; i++) {
       if (i == this.dragIdx) {
         const dragForce = this.dragPos!.clone().sub(this.pos[i]);
-        this.vel[i].add(dragForce.multiplyScalar(delta * 5));
+        this.vel[i].add(dragForce);
+        // this.vel[i].multiplyScalar(0);
       } else {
         // this.vel[i].y += g * delta;
       }
       t0.copy(this.vel[i]).multiplyScalar(delta);
       this.nextpos[i].copy(this.pos[i]).add(t0);
       this.deltapos[i].set(0, 0, 0);
+
+      if (i == this.dragIdx) {
+        this.nextpos[i].copy(this.dragPos!);
+      }
     }
 
     // compute volume constraint
@@ -243,11 +250,23 @@ export class SoftBodyObject implements Collider {
 
     for (let n = 0; n < numSubsteps; n++) {
       // distance constraint
-      for (let i = 0; this.edgeIdx.length / 2; i++) {
-        const i0 = this.edgeIdx[2 * i];
-        const i1 = this.edgeIdx[2 * i + 1];
+      const diff = new THREE.Vector3(0, 0, 0);
+      for (let i = 0; i < this.edgeRaw.length / 2; i++) {
+        const i0 = this.edgeRaw[2 * i];
+        const i1 = this.edgeRaw[2 * i + 1];
         const x0 = this.nextpos[i0];
         const x1 = this.nextpos[i1];
+        const w0 = this.invmass[i0];
+        const w1 = this.invmass[i1];
+        const l0 = this.l0[i];
+
+        diff.copy(x0).sub(x1);
+        const len = diff.length();
+        diff.multiplyScalar((k * w0 * (len - l0)) / len / (w0 + w1));
+        this.nextpos[i0].sub(diff);
+
+        diff.multiplyScalar(w1 / w0);
+        this.nextpos[i1].add(diff);
       }
 
       // volume constraint
