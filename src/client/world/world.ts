@@ -4,7 +4,7 @@ import { GUI } from "dat.gui";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { SoftBodyObject } from "./softbody";
 import { bunnyData } from "../objs/bunny";
-import { ObjFile, ObjectOption } from "../objs/obj";
+import { ObjFile, ObjectOption, vecPrint } from "../objs/obj";
 
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 const basicMat = new THREE.MeshNormalMaterial({
@@ -114,9 +114,12 @@ export class World {
         y: -(e.clientY / window.innerHeight) * 2 + 1,
       };
       world.raycaster.setFromCamera(mouse, world.camera);
-      const intersects = world.raycaster.intersectObjects(
-        world.softBodies.map((s) => s.mesh)
-      );
+
+      const meshes = world.softBodies.map((s) => s.mesh);
+      const intersects = world.raycaster.intersectObjects(meshes);
+
+      const ray = world.raycaster.ray;
+      console.log(`${vecPrint(ray.origin)} ${vecPrint(ray.direction)}`);
 
       if (intersects.length > 0) {
         const ip = intersects[0]!;
@@ -206,6 +209,8 @@ export class World {
         for (const body of this.softBodies) {
           body.onFixedUpdate(this.timeStep);
         }
+
+        // console.log(this.softBodies[0].mesh.geometry.attributes.position);
 
         this.timeAccum -= this.timeStep;
       }

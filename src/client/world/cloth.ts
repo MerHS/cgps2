@@ -1,27 +1,26 @@
 import * as THREE from "three";
 import { Collider, ObjFile, ObjectOption } from "../objs/obj";
 
-export class SoftBodyObject implements Collider {
+export class Cloth implements Collider {
   initPos: number[];
   pos: THREE.Vector3[];
   vel: THREE.Vector3[];
 
   nextpos: THREE.Vector3[];
   deltapos: THREE.Vector3[];
+
   mass: number[];
   invmass: number[];
-  v0: number[];
   l0: number[];
   edgeRaw: number[];
 
   stiffK: number;
   translate: THREE.Vector3;
   vertLen: number;
-  tetLen: number;
+  triLen: number;
   options: ObjectOption;
 
   vert: Float32Array;
-  tetIdx: Uint32Array;
   idx: Uint16Array;
   edgeIdx: Uint16Array;
 
@@ -48,18 +47,17 @@ export class SoftBodyObject implements Collider {
     this.deltapos = [];
     this.vel = [];
     this.edgeRaw = file.tetEdgeIds;
+    this.triLen = file.tetSurfaceTriIds.length / 3;
 
     this.translate = translate ? translate : new THREE.Vector3(0, 0, 0);
 
     this.vertLen = file.verts.length / 3;
-    this.tetLen = file.tetIds.length / 4;
     this.stiffK = stiffK;
     this.options = option;
 
     this.mass = Array(this.vertLen).fill(0);
     let massNum = Array(this.vertLen).fill(0);
     this.invmass = Array(this.vertLen).fill(1);
-    this.v0 = Array(this.tetLen).fill(0);
     this.l0 = Array(this.edgeRaw.length / 2).fill(0);
 
     for (let i = 0; i < this.initPos.length / 3; i++) {
@@ -76,7 +74,6 @@ export class SoftBodyObject implements Collider {
     }
 
     this.vert = new Float32Array(this.initPos);
-    this.tetIdx = new Uint32Array(file["tetIds"]);
     this.idx = new Uint16Array(file["tetSurfaceTriIds"]);
     this.edgeIdx = new Uint16Array(file["tetEdgeIds"]);
 
@@ -97,7 +94,11 @@ export class SoftBodyObject implements Collider {
 
     this.mesh = new THREE.Mesh(
       this.geometry,
-      new THREE.MeshPhongMaterial({ color: 0x00f00f, flatShading: true })
+      new THREE.MeshPhongMaterial({
+        color: 0xb03080,
+        flatShading: true,
+        side: THREE.DoubleSide,
+      })
     );
     this.mesh.geometry.computeVertexNormals();
 
@@ -116,47 +117,37 @@ export class SoftBodyObject implements Collider {
     // add tet volumes
     let t0 = new THREE.Vector3(0, 0, 0);
     let t1 = new THREE.Vector3(0, 0, 0);
-    for (let i = 0; i < this.tetLen; i++) {
-      const [i0, i1, i2, i3] = [
-        this.tetIdx[4 * i],
-        this.tetIdx[4 * i + 1],
-        this.tetIdx[4 * i + 2],
-        this.tetIdx[4 * i + 3],
+    for (let i = 0; i < this.triLen; i++) {
+      const [i0, i1, i2] = [
+        this.idx[3 * i],
+        this.idx[3 * i + 1],
+        this.idx[3 * i + 2],
       ];
 
-      const [x0, x1, x2, x3] = [
-        this.pos[i0],
-        this.pos[i1],
-        this.pos[i2],
-        this.pos[i3],
-      ];
+      const [x0, x1, x2] = [this.pos[i0], this.pos[i1], this.pos[i2]];
       t0.copy(x1).sub(x0);
       t1.copy(x2).sub(x0);
       t0.cross(t1);
-      t1.copy(x3).sub(x0);
 
-      const v0 = t0.dot(t1);
-      this.v0[i] = v0; // 6 * v0
+      const v0 = t0.length();
       this.mass[i0] += v0;
       this.mass[i1] += v0;
       this.mass[i2] += v0;
-      this.mass[i3] += v0;
       massNum[i0] += 1;
       massNum[i1] += 1;
       massNum[i2] += 1;
-      massNum[i3] += 1;
     }
 
     for (let i = 0; i < this.vertLen; i++) {
       if (massNum[i]) {
-        this.mass[i] = (this.mass[i] * 100) / massNum[i];
+        this.mass[i] = (this.mass[i] * 30) / massNum[i];
         this.invmass[i] = 1 / this.mass[i];
       }
     }
   }
 
-  bbox(): THREE.Box3 {
-    return this.mesh.geometry.boundingBox!;
+  bsphere(): THREE.Sphere {
+    return this.mesh.geometry.boundingSphere!;
   }
 
   render() {
@@ -168,10 +159,9 @@ export class SoftBodyObject implements Collider {
 
     this.mesh.geometry.computeVertexNormals();
     this.mesh.geometry.attributes.position.needsUpdate = true;
-    this.mesh.geometry.computeBoundingBox();
     this.mesh.geometry.computeBoundingSphere();
 
-    // this.mesh.geometry.boundingSphere!.radius;
+    this.mesh.geometry.boundingSphere!.radius;
 
     this.edges.geometry.computeVertexNormals();
     this.edges.geometry.attributes.position.needsUpdate = true;
