@@ -52,7 +52,7 @@ export class World {
 
     this.paused = false;
     this.timeStep = 0.03; // 30 fps
-    this.numSubSteps = 10;
+    this.numSubSteps = 5;
     this.hoverObj = undefined;
 
     this.sharedOptions = {
@@ -65,6 +65,7 @@ export class World {
     this.softBodies = [];
 
     const bunny = new SoftBodyObject(
+      0,
       bunnyData,
       this.scene,
       0.5,
@@ -110,15 +111,21 @@ export class World {
       tetSurfaceTriIds: [0, 2, 1, 0, 1, 3, 1, 2, 3, 2, 0, 3],
     };
 
-    // const cube = new SoftBodyObject(cubeObj, this.scene, 1, this.sharedOptions);
+    const cube = new SoftBodyObject(
+      1,
+      cubeObj,
+      this.scene,
+      1,
+      this.sharedOptions
+    );
     // const tet = new SoftBodyObject(tetObj, this.scene, 1, this.sharedOptions);
 
     this.softBodies.push(bunny);
-    // this.softBodies.push(cube);
+    this.softBodies.push(cube);
     // this.softBodies.push(tet);
 
     this.sharedOptions.colliders.push(bunny);
-    // this.sharedOptions.colliders.push(cube);
+    this.sharedOptions.colliders.push(cube);
     // this.sharedOptions.colliders.push(tet);
     this.sharedOptions.colliders.push(backColl);
 
@@ -179,14 +186,33 @@ export class World {
     lookat.applyQuaternion(this.camera.quaternion);
   }
 
+  addSoft() {
+    const pos = new THREE.Vector3(
+      Math.random() * 10 - 5,
+      Math.random() * 3 + 3 + Math.random() * 10 - 5
+    );
+    const bunny = new SoftBodyObject(
+      this.sharedOptions.colliders.length,
+      bunnyData,
+      this.scene,
+      0.5,
+      this.sharedOptions,
+      pos
+    );
+    this.softBodies.push(bunny);
+    this.sharedOptions.colliders.push(bunny);
+    bunny.onStart();
+  }
+
   onStart() {
     this.scene.add(this.boundingBox);
 
     this.gui.add(this, "pause").name("Pause");
     this.gui.add(this, "reset").name("Reset");
+    this.gui.add(this, "addSoft").name("Add Softbody");
     this.gui.add(this, "timeStep", 0.001, 0.3, 0.001).name("Time Step");
 
-    this.gui.add(this, "numSubSteps", 1, 50).onChange((v) => {
+    this.gui.add(this, "numSubSteps", 1, 50, 1).onChange((v) => {
       this.sharedOptions.numSubsteps = v;
     });
 

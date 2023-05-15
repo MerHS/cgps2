@@ -33,14 +33,17 @@ export class SoftBodyObject implements Collider {
 
   dragIdx?: number;
   dragPos?: THREE.Vector3;
+  collIndex: number;
 
   constructor(
+    collIndex: number,
     file: ObjFile,
     scene: THREE.Scene,
     stiffK: number,
     option: ObjectOption,
     translate?: THREE.Vector3
   ) {
+    this.collIndex = collIndex;
     this.scene = scene;
     this.initPos = file["verts"];
     this.pos = [];
@@ -213,7 +216,7 @@ export class SoftBodyObject implements Collider {
 
   onFixedUpdate(delta: number) {
     // grav. accel.: 1 m/s^2
-    const g = -1;
+    const g = -3;
     let t0 = new THREE.Vector3();
     let t1 = new THREE.Vector3();
 
@@ -221,6 +224,9 @@ export class SoftBodyObject implements Collider {
     for (let i = 0; i < this.vertLen; i++) {
       if (i == this.dragIdx) {
         const dragForce = this.dragPos!.clone().sub(this.pos[i]);
+        if (dragForce.length() > 5) {
+          dragForce.normalize().multiplyScalar(5);
+        }
         this.vel[i].add(dragForce);
         // this.vel[i].multiplyScalar(0);
       } else {
@@ -322,7 +328,12 @@ export class SoftBodyObject implements Collider {
       const x1 = new THREE.Vector3(0, 0, 0);
       const x2 = new THREE.Vector3(0, 0, 0);
       const p0 = new THREE.Vector3(0, 0, 0);
-      for (let col of this.options.colliders) {
+
+      for (let colIdx = 0; colIdx < this.options.colliders.length; colIdx++) {
+        if (colIdx == this.collIndex) {
+          continue;
+        }
+        const col = this.options.colliders[colIdx];
         const bbox = col.bbox();
 
         // static
@@ -366,25 +377,6 @@ export class SoftBodyObject implements Collider {
               if (pxt > 0 && t0max > pxt) {
                 t0max = pxt;
                 ns = t0.clone();
-              } else {
-                // p0.copy(x0);
-                // const t = p0.sub(x).dot(t0) / l.dot(t0);
-                // if (1 > t && t > 0) {
-                //   let xa = x.clone().add(l.multiplyScalar(t)).sub(x0);
-                //   let cp = this.nextpos[pi].clone().sub(xa).dot(t0);
-                //   if (cp > 1) {
-                //     cp = 1;
-                //   }
-                //   t1.copy(x1).sub(x0);
-                //   let pa = t1.cross(xa).dot(t0);
-                //   t1.copy(x2).sub(x0);
-                //   let pb = xa.cross(t1).dot(t0);
-                //   // in triangle
-                //   if (pa > 0 && pb > 0) {
-                //     // bound constriant
-                //     // this.nextpos[pi].sub(t0.clone().multiplyScalar(cp));
-                //   }
-                // }
               }
             }
 
@@ -393,6 +385,59 @@ export class SoftBodyObject implements Collider {
                 t0max = 1;
               }
               this.nextpos[pi].add(ns.multiplyScalar(t0max));
+            }
+          }
+        } else {
+          for (let pi = 0; pi < this.vertLen; pi++) {
+            let x = this.pos[pi].clone();
+            let l = this.nextpos[pi].clone().sub(x);
+            if (bbox.containsPoint(this.nextpos[pi])) {
+              for (let i = 0; i < col.idx.length / 3; i++) {
+                const [i0, i1, i2] = [
+                  col.idx[3 * i],
+                  col.idx[3 * i + 1],
+                  col.idx[3 * i + 2],
+                ];
+                x0.set(
+                  col.vert[i0 * 3],
+                  col.vert[i0 * 3 + 1],
+                  col.vert[i0 * 3 + 2]
+                );
+                x1.set(
+                  col.vert[i1 * 3],
+                  col.vert[i1 * 3 + 1],
+                  col.vert[i1 * 3 + 2]
+                );
+                x2.set(
+                  col.vert[i2 * 3],
+                  col.vert[i2 * 3 + 1],
+                  col.vert[i2 * 3 + 2]
+                );
+
+                t0.copy(x1).sub(x0);
+                t1.copy(x2).sub(x0);
+                t0.cross(t1).normalize(); // n
+                p0.copy(x0);
+
+                const t = p0.sub(x).dot(t0) / l.dot(t0);
+                if (1 > t && t > 0) {
+                  let xa = x.clone().add(l.multiplyScalar(t));
+                  let cp = this.nextpos[pi].clone().sub(xa).dot(t0);
+                  if (cp > 0.3) {
+                    cp = 0.3;
+                  }
+                  t1.copy(x1).sub(x0);
+                  let pa = t1.cross(xa).dot(t0);
+                  t1.copy(x2).sub(x0);
+                  let pb = xa.cross(t1).dot(t0);
+                  // in triangle
+                  if (pa > 0 && pb > 0) {
+                    // bound constriant
+                    this.nextpos[pi].add(t0.clone().multiplyScalar(cp));
+                    break;
+                  }
+                }
+              }
             }
           }
         }
@@ -405,9 +450,9 @@ export class SoftBodyObject implements Collider {
 
       // clutch velocity
       this.vel[i].copy(t0);
-      // if (this.vel[i].length() > 10) {
-      //   this.vel[i].normalize().multiplyScalar(10);
-      // }
+      if (this.vel[i].length() > 10) {
+        this.vel[i].normalize().multiplyScalar(10);
+      }
       this.pos[i].add(t0.multiplyScalar(delta));
     }
   }
