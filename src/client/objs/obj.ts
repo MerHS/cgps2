@@ -12,7 +12,7 @@ export interface Collider {
   vert: Float32Array; //
   idx: Uint16Array; // tetSurfaceTriIds
 
-  bbox(): THREE.Box3;
+  bbox(): THREE.Box3 | undefined;
 }
 
 export interface ObjectOption {

@@ -4,7 +4,7 @@ import { GUI } from "dat.gui";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { SoftBodyObject } from "./softbody";
 import { bunnyData } from "../objs/bunny";
-import { ObjFile, ObjectOption, vecPrint } from "../objs/obj";
+import { Collider, ObjFile, ObjectOption, vecPrint } from "../objs/obj";
 
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 const basicMat = new THREE.MeshNormalMaterial({
@@ -48,7 +48,7 @@ export class World {
     this.boundary = 10;
     this.boundingBox = new THREE.Mesh(boxGeo, basicMat);
     this.boundingBox.scale.set(this.boundary, this.boundary, this.boundary);
-    this.boundingBox.position.set(0, this.boundary / 2 + 0.1, 0);
+    this.boundingBox.position.set(0, this.boundary / 2 + 0.001, 0);
 
     this.paused = false;
     this.timeStep = 0.03; // 30 fps
@@ -71,6 +71,20 @@ export class World {
       this.sharedOptions,
       new THREE.Vector3(0, 2, 0)
     );
+
+    const backColl: Collider = {
+      vert: new Float32Array([
+        -5, 0, -5, 5, 0, -5, 5, 0, 5, -5, 0, 5, -5, 10, -5, 5, 10, -5, 5, 10, 5,
+        -5, 10, 5,
+      ]),
+      idx: new Uint16Array([
+        0, 3, 1, 1, 3, 2, 6, 2, 7, 7, 2, 3, 6, 5, 2, 5, 1, 2, 4, 1, 5, 4, 0, 1,
+        4, 7, 3, 4, 3, 0, 4, 5, 7, 7, 5, 6,
+      ]),
+      bbox: function () {
+        return undefined;
+      },
+    };
 
     const cubeObj: ObjFile = {
       name: "cube",
@@ -96,16 +110,17 @@ export class World {
       tetSurfaceTriIds: [0, 2, 1, 0, 1, 3, 1, 2, 3, 2, 0, 3],
     };
 
-    const cube = new SoftBodyObject(cubeObj, this.scene, 1, this.sharedOptions);
-    const tet = new SoftBodyObject(tetObj, this.scene, 1, this.sharedOptions);
+    // const cube = new SoftBodyObject(cubeObj, this.scene, 1, this.sharedOptions);
+    // const tet = new SoftBodyObject(tetObj, this.scene, 1, this.sharedOptions);
 
     this.softBodies.push(bunny);
-    this.softBodies.push(cube);
-    this.softBodies.push(tet);
+    // this.softBodies.push(cube);
+    // this.softBodies.push(tet);
 
     this.sharedOptions.colliders.push(bunny);
-    this.sharedOptions.colliders.push(cube);
-    this.sharedOptions.colliders.push(tet);
+    // this.sharedOptions.colliders.push(cube);
+    // this.sharedOptions.colliders.push(tet);
+    this.sharedOptions.colliders.push(backColl);
 
     const world = this;
     function onMouseDown(e: MouseEvent) {
@@ -117,9 +132,6 @@ export class World {
 
       const meshes = world.softBodies.map((s) => s.mesh);
       const intersects = world.raycaster.intersectObjects(meshes);
-
-      const ray = world.raycaster.ray;
-      console.log(`${vecPrint(ray.origin)} ${vecPrint(ray.direction)}`);
 
       if (intersects.length > 0) {
         const ip = intersects[0]!;
@@ -165,7 +177,6 @@ export class World {
 
     let lookat = new THREE.Vector3(0, 0, -1);
     lookat.applyQuaternion(this.camera.quaternion);
-    console.log(lookat);
   }
 
   onStart() {

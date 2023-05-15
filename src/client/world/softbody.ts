@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Collider, ObjFile, ObjectOption } from "../objs/obj";
+import { Collider, ObjFile, ObjectOption, vecPrint } from "../objs/obj";
 
 export class SoftBodyObject implements Collider {
   initPos: number[];
@@ -224,7 +224,7 @@ export class SoftBodyObject implements Collider {
         this.vel[i].add(dragForce);
         // this.vel[i].multiplyScalar(0);
       } else {
-        // this.vel[i].y += g * delta;
+        this.vel[i].y += g * delta;
       }
       t0.copy(this.vel[i]).multiplyScalar(delta);
       this.nextpos[i].copy(this.pos[i]).add(t0);
@@ -316,13 +316,99 @@ export class SoftBodyObject implements Collider {
         this.nextpos[i2].add(d2c);
         this.nextpos[i3].add(d3c);
       }
+
+      // collision
+      const x0 = new THREE.Vector3(0, 0, 0);
+      const x1 = new THREE.Vector3(0, 0, 0);
+      const x2 = new THREE.Vector3(0, 0, 0);
+      const p0 = new THREE.Vector3(0, 0, 0);
+      for (let col of this.options.colliders) {
+        const bbox = col.bbox();
+
+        // static
+        if (!bbox) {
+          for (let pi = 0; pi < this.vertLen; pi++) {
+            let x = this.pos[pi].clone();
+            let l = this.nextpos[pi].clone().sub(x);
+
+            let t0max = 1000000;
+            let ns: THREE.Vector3 | undefined = undefined;
+
+            for (let i = 0; i < col.idx.length / 3; i++) {
+              const [i0, i1, i2] = [
+                col.idx[3 * i],
+                col.idx[3 * i + 1],
+                col.idx[3 * i + 2],
+              ];
+              x0.set(
+                col.vert[i0 * 3],
+                col.vert[i0 * 3 + 1],
+                col.vert[i0 * 3 + 2]
+              );
+              x1.set(
+                col.vert[i1 * 3],
+                col.vert[i1 * 3 + 1],
+                col.vert[i1 * 3 + 2]
+              );
+              x2.set(
+                col.vert[i2 * 3],
+                col.vert[i2 * 3 + 1],
+                col.vert[i2 * 3 + 2]
+              );
+
+              t0.copy(x1).sub(x0);
+              t1.copy(x2).sub(x0);
+              t0.cross(t1).normalize(); // n
+              p0.copy(x0);
+
+              const pxt = x0.sub(x).dot(t0);
+              // other side
+              if (pxt > 0 && t0max > pxt) {
+                t0max = pxt;
+                ns = t0.clone();
+              } else {
+                // p0.copy(x0);
+                // const t = p0.sub(x).dot(t0) / l.dot(t0);
+                // if (1 > t && t > 0) {
+                //   let xa = x.clone().add(l.multiplyScalar(t)).sub(x0);
+                //   let cp = this.nextpos[pi].clone().sub(xa).dot(t0);
+                //   if (cp > 1) {
+                //     cp = 1;
+                //   }
+                //   t1.copy(x1).sub(x0);
+                //   let pa = t1.cross(xa).dot(t0);
+                //   t1.copy(x2).sub(x0);
+                //   let pb = xa.cross(t1).dot(t0);
+                //   // in triangle
+                //   if (pa > 0 && pb > 0) {
+                //     // bound constriant
+                //     // this.nextpos[pi].sub(t0.clone().multiplyScalar(cp));
+                //   }
+                // }
+              }
+            }
+
+            if (ns) {
+              if (t0max > 1) {
+                t0max = 1;
+              }
+              this.nextpos[pi].add(ns.multiplyScalar(t0max));
+            }
+          }
+        }
+      }
     }
 
     // velocity update
     for (let i = 0; i < this.vertLen; i++) {
       t0.copy(this.nextpos[i]).sub(this.pos[i]).divideScalar(delta);
+
+      // clutch velocity
       this.vel[i].copy(t0);
-      this.pos[i].copy(this.nextpos[i]);
+      // if (this.vel[i].length() > 10) {
+      //   this.vel[i].normalize().multiplyScalar(10);
+      // }
+      this.pos[i].add(t0.multiplyScalar(delta));
     }
   }
 
