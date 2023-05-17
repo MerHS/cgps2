@@ -41,7 +41,8 @@ export class SoftBodyObject implements Collider {
     scene: THREE.Scene,
     stiffK: number,
     option: ObjectOption,
-    translate?: THREE.Vector3
+    translate?: THREE.Vector3,
+    color?: number
   ) {
     this.collIndex = collIndex;
     this.scene = scene;
@@ -98,9 +99,11 @@ export class SoftBodyObject implements Collider {
       new THREE.BufferAttribute(this.vert, 3)
     );
 
+    const colorHex = color ? color : 0x00f00f;
+
     this.mesh = new THREE.Mesh(
       this.geometry,
-      new THREE.MeshPhongMaterial({ color: 0x00f00f, flatShading: true })
+      new THREE.MeshPhongMaterial({ color: colorHex, flatShading: true })
     );
     this.mesh.geometry.computeVertexNormals();
 
@@ -214,7 +217,7 @@ export class SoftBodyObject implements Collider {
     return this.pos[idx].clone();
   }
 
-  onFixedUpdate(delta: number) {
+  onFixedUpdate_init(delta: number) {
     // grav. accel.: 1 m/s^2
     const g = -3;
     let t0 = new THREE.Vector3();
@@ -240,6 +243,11 @@ export class SoftBodyObject implements Collider {
         this.nextpos[i].copy(this.dragPos!);
       }
     }
+  }
+
+  onFixedUpdate_constr(delta: number) {
+    let t0 = new THREE.Vector3();
+    let t1 = new THREE.Vector3();
 
     // compute volume constraint
     const x31 = new THREE.Vector3();
@@ -443,6 +451,10 @@ export class SoftBodyObject implements Collider {
         }
       }
     }
+  }
+
+  onFixedUpdate_apply(delta: number) {
+    let t0 = new THREE.Vector3();
 
     // velocity update
     for (let i = 0; i < this.vertLen; i++) {
@@ -450,8 +462,8 @@ export class SoftBodyObject implements Collider {
 
       // clutch velocity
       this.vel[i].copy(t0);
-      if (this.vel[i].length() > 10) {
-        this.vel[i].normalize().multiplyScalar(10);
+      if (this.vel[i].length() > 5) {
+        this.vel[i].normalize().multiplyScalar(5);
       }
       this.pos[i].add(t0.multiplyScalar(delta));
     }
